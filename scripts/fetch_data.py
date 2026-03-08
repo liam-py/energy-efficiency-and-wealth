@@ -1,4 +1,5 @@
 import requests
+import json
 import os
 from dotenv import load_dotenv
 
@@ -19,9 +20,9 @@ def fetchRaw(url):
         response = requests.get(url)
         if response.status_code == 200:
             print("Succesful request")
-            data = response.json
-            with open("../data/raw/eia_raw.txt", "w") as file:
-                file.write(data)
+            data = response.json()
+            with open("data/raw/eia_raw.txt", "w") as file:
+                json.dump(data, file)
         else:
             # unsuccessful request
             print(f"Request error: status code {response.status_code}")
