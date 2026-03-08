@@ -1,7 +1,18 @@
 import requests
+import os
+from dotenv import load_dotenv
+
+# load private variables from local dot env file
+load_dotenv()
+# access vars
+eia_key = os.getenv("eia_api_key")
 
 # URL endpoint for eia data
-eia_url = "https://api.eia.gov/v2/electricity/retail-sales/data/?frequency=annual&data[0]=customers&data[1]=sales&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000"
+# catch errors with private key variable
+if eia_key is not None:
+    eia_url = f"https://api.eia.gov/v2/electricity/retail-sales/data/?frequency=annual&data[0]=customers&data[1]=sales&sort[0][column]=period&sort[0][direction]=desc&offset=0&length=5000&api_key={eia_key}"
+else:
+    raise RuntimeError("Missing eia_key. Set it in your environment or .env file.")
 
 def fetchRaw(url):
     try:
@@ -9,7 +20,7 @@ def fetchRaw(url):
         if response.status_code == 200:
             print("Succesful request")
             data = response.json
-            with open("eia_raw.txt", "w") as file:
+            with open("../data/raw/eia_raw.txt", "w") as file:
                 file.write(data)
         else:
             # unsuccessful request
