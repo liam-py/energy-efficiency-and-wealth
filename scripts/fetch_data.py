@@ -1,111 +1,115 @@
 import requests
-import zipfile
 import json
 import os
-import io
 from dotenv import load_dotenv
 
 # load private variables from local dot env file
 load_dotenv()
 # access vars
-EIA_KEY = os.getenv("eia_api_key")
+APP_TOKEN = os.getenv("socrata_application_token")
 
-# ensure we were able to get kets from env file
-if EIA_KEY is None:
-    raise RuntimeError("Missing eia_api_key. Set it in your environment or .env file.")
-
-CENSUS_URLS = {
-    "census_2010_2019": (
-        "https://www2.census.gov/programs-surveys/popest/datasets/"
-        "2010-2019/national/totals/nst-est2019-alldata.csv"
-    ),
-    "census_2020_2025": (
-        "https://www2.census.gov/programs-surveys/popest/datasets/"
-        "2020-2025/state/totals/NST-EST2025-ALLDATA.csv"
-    )
+NYC_COUNTIES = {
+    "manhattan": "061",
+    "bronx":     "005",
+    "brooklyn":  "047",
+    "queens":    "081",
+    "staten_island": "085",
 }
 
-# paginate since the eia API can only return 5000 rows at a time
-def fetchEIA():
-    filename = "eia_raw_2010_2025"
-    base_url = f"https://api.eia.gov/v2/electricity/retail-sales/data/?frequency=annual&data[0]=sales&start=2010&end=2025&sort[0][column]=period&sort[0][direction]=desc&api_key={EIA_KEY}"
-    try:
-        all_data = []
-        offset = 0
-        limit = 5000
+ACS_BASE_URL = "https://api.census.gov/data/2022/acs/acs5"
 
-        while True:
-            # paginate by updating offset in url for each request
-            url = base_url + f"&offset={offset}&length={limit}"
-            response = requests.get(url)
+LL84_BASE_URL = "https://data.cityofnewyork.us/resource/5zyy-y8am.json"
+
+def fetchLL84():
+    all_data = []
+    limit = 1000
+    offset = 0
+
+    headers = {}
+    if APP_TOKEN:
+        headers["X-App-Token"] = APP_TOKEN
+
+    # fetch all data in pages from LL84 table
+    while True:
+        # bbl, bin, borough, 
+        params = {
+            "$select": (
+                "property_id,"
+                "nyc_borough_block_and_lot,"
+                "nyc_building_identification,"
+                "borough,"
+                "electricity_use_grid_purchase_1,"
+                "property_gfa_calculated_1,"
+                "primary_property_type_self"
+            ),
+            "$where": (
+                "electricity_use_grid_purchase_1 IS NOT NULL"
+                " AND year_ending='2023-12-31T00:00:00.000'"),
+            "$limit": limit,
+            "$offset": offset,
+        }
+
+        try:
+            response = requests.get(LL84_BASE_URL, params=params, headers=headers)
             if response.status_code != 200:
-                print(f"Request error: status code {response.status_code}")
+                print(f"Request Error: status code {response.status_code}")
                 print(response.text)
                 break
-
-            data = response.json()
-            rows = data.get("response", {}).get("data", [])
+            
+            rows = response.json()
 
             if not rows:
                 break
 
             all_data.extend(rows)
             print(f"Fetched {len(all_data)} rows so far...")
-
-            # hit the end of the data
+            
+            # if we've hit the end of the data not because of a limit
             if len(rows) < limit:
                 break
 
             offset += limit
+        except requests.exceptions.RequestException as e:
+            print("Network Error: failed to reach LL84 {e}")
+            print()
 
-        print(f"Successful request: {filename} — {len(all_data)} total rows")
-        with open(f"data/raw/{filename}.json", "w", encoding="latin-1") as file:
+        # dump all data into local file
+        with open(f"data/raw/ll84_raw.json", "w", encoding="latin-1") as file:
             json.dump(all_data, file)
 
-    except requests.exceptions.RequestException as e:
-        print(f"Network error: {e}")
+def fetchACS():
+    all_tracts = []
 
-def fetchCensus(filename, url):
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            print(f"Successful request: {filename}")
-            with open(f"data/raw/{filename}.csv", "w", encoding="latin-1") as file:
-                file.write(response.text)
-        else:
-            # unsuccessful request
-            print(f"Request error: status code {response.status_code}")
-    except requests.exceptions.RequestException as e:
-        # for network related errors
-        print(f"Network error: {e}")
+    # query for each county's data from ACS
+    for borough, county_fips in NYC_COUNTIES.items():
+        params = {
+            "get": "NAME,B01003_001E,B19013_001E",
+            "for": "tract:*",
+            "in": f"state:36 county:{county_fips}",
+        }
+        try:
+            response = requests.get(ACS_BASE_URL, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                headers = data[0]
+                # zip function iterates over multiple lists simultaneously and pairs elements in different areas into tuples by index.
+                # by zipping one row with header we associate each data point (col) of each row with the header for it
+                # turning table into a list of dictionaries
+                rows = [dict(zip(headers, row)) for row in data[1:]]
+                for row in rows:
+                    row["borough"] = borough
+                all_tracts.extend(rows)
+                print(f"Fetched {len(rows)} tracts for {borough}")
+            else:
+                print(f"Request error for {borough}: status code {response.status_code}")
+                print(response.text)
 
-def fetch_bea():
-    url = "https://apps.bea.gov/regional/zip/SAGDP.zip"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            print("Successful request: bea_raw")
-            z = zipfile.ZipFile(io.BytesIO(response.content))
-            target = [f for f in z.namelist() if "SAGDP2" in f and "ALL_AREAS" in f and f.endswith(".csv")]
-            if not target:
-                print("SAGDP2N file not found in ZIP contents:")
-                print(z.namelist())
-                return
-            # split found filename into just name without path or extension
-            filename = os.path.splitext(os.path.basename(target[0]))[0]
-            with z.open(target[0]) as infile:
-                content = infile.read().decode("latin-1")
-            with open(f"data/raw/{filename}.csv", "w", encoding="latin-1") as outfile:
-                outfile.write(content)
-            print("Extracted SAGDP2N BEA data")
-        else:
-            print(f"Request error: status code {response.status_code}")
-            print(response.text)
-    except requests.exceptions.RequestException as e:
-        print(f"Network error: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"Network error ({borough}): {e}")
 
+    print(f"Successful request: acs_raw — {len(all_tracts)} total tracts")
+    with open("data/raw/acs_raw.json", "w") as file:
+        json.dump(all_tracts, file)
 
-fetchEIA()
-for filename, url in CENSUS_URLS.items():
-    fetchCensus(filename, url)
-fetch_bea()
+fetchLL84()
+fetchACS()
