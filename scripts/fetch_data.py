@@ -37,13 +37,13 @@ def fetchLL84():
         # bbl, bin, borough, 
         params = {
             "$select": (
-                "property_id,"
                 "nyc_borough_block_and_lot,"
                 "borough,"
                 "site_eui_kbtu_ft"
             ),
             "$where": (
                 "site_eui_kbtu_ft IS NOT NULL"
+                " AND nyc_borough_block_and_lot IS NOT NULL"
                 " AND year_ending='2023-12-31T00:00:00.000'"),
             "$limit": limit,
             "$offset": offset,
@@ -114,4 +114,4 @@ def fetchACS():
         json.dump(all_tracts, file)
 
 fetchLL84()
-# fetchACS()
+fetchACS()
