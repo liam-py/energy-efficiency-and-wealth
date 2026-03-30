@@ -39,8 +39,7 @@ def fetchLL84():
                 "nyc_building_identification,"
                 "borough,"
                 "electricity_use_grid_purchase_1,"
-                "property_gfa_calculated_1,"
-                "primary_property_type_self"
+                "property_gfa_calculated_1"
             ),
             "$where": (
                 "electricity_use_grid_purchase_1 IS NOT NULL"
@@ -70,12 +69,12 @@ def fetchLL84():
 
             offset += limit
         except requests.exceptions.RequestException as e:
-            print("Network Error: failed to reach LL84 {e}")
+            print(f"Network Error: failed to reach LL84 {e}")
             print()
 
-        # dump all data into local file
-        with open(f"data/raw/ll84_raw.json", "w", encoding="latin-1") as file:
-            json.dump(all_data, file)
+    # dump all data into local file
+    with open(f"data/raw/ll84_raw.json", "w", encoding="utf-8") as file:
+        json.dump(all_data, file)
 
 def fetchACS():
     all_tracts = []
@@ -83,7 +82,7 @@ def fetchACS():
     # query for each county's data from ACS
     for borough, county_fips in NYC_COUNTIES.items():
         params = {
-            "get": "NAME,B01003_001E,B19013_001E",
+            "get": "NAME,B01003_001E,B19013_001E", # census tract name, population, median household income
             "for": "tract:*",
             "in": f"state:36 county:{county_fips}",
         }
