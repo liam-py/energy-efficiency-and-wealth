@@ -2,11 +2,14 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
+import time
 
 # load private variables from local dot env file
 load_dotenv()
 # access vars
 APP_TOKEN = os.getenv("socrata_application_token")
+if APP_TOKEN is None:
+    raise RuntimeError("Missing socrata_application_token in .env file")
 
 NYC_COUNTIES = {
     "manhattan": "061",
@@ -36,13 +39,11 @@ def fetchLL84():
             "$select": (
                 "property_id,"
                 "nyc_borough_block_and_lot,"
-                "nyc_building_identification,"
                 "borough,"
-                "electricity_use_grid_purchase_1,"
-                "property_gfa_calculated_1"
+                "site_eui_kbtu_ft"
             ),
             "$where": (
-                "electricity_use_grid_purchase_1 IS NOT NULL"
+                "site_eui_kbtu_ft IS NOT NULL"
                 " AND year_ending='2023-12-31T00:00:00.000'"),
             "$limit": limit,
             "$offset": offset,
@@ -68,6 +69,8 @@ def fetchLL84():
                 break
 
             offset += limit
+
+            time.sleep(1)
         except requests.exceptions.RequestException as e:
             print(f"Network Error: failed to reach LL84 {e}")
             print()
@@ -82,7 +85,7 @@ def fetchACS():
     # query for each county's data from ACS
     for borough, county_fips in NYC_COUNTIES.items():
         params = {
-            "get": "NAME,B01003_001E,B19013_001E", # census tract name, population, median household income
+            "get": "NAME,B19013_001E", # census tract name, population, median household income
             "for": "tract:*",
             "in": f"state:36 county:{county_fips}",
         }
@@ -111,4 +114,4 @@ def fetchACS():
         json.dump(all_tracts, file)
 
 fetchLL84()
-fetchACS()
+# fetchACS()
