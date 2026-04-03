@@ -34,17 +34,18 @@ def fetchLL84():
 
     # fetch all data in pages from LL84 table
     while True:
-        # bbl, bin, borough, 
+        # form a query for data entries we need 
         params = {
             "$select": (
-                "nyc_borough_block_and_lot,"
-                "borough,"
-                "site_eui_kbtu_ft"
+                "nyc_borough_block_and_lot," # BBL number identifying each property
+                "site_eui_kbtu_ft" # Energy Use Intensity metric measuring energy use per sqft
             ),
             "$where": (
+                # filter for non-null in 2023
                 "site_eui_kbtu_ft IS NOT NULL"
                 " AND nyc_borough_block_and_lot IS NOT NULL"
                 " AND year_ending='2023-12-31T00:00:00.000'"),
+            # paginate
             "$limit": limit,
             "$offset": offset,
         }
@@ -85,7 +86,7 @@ def fetchACS():
     # query for each county's data from ACS
     for borough, county_fips in NYC_COUNTIES.items():
         params = {
-            "get": "NAME,B19013_001E", # census tract name, population, median household income
+            "get": "NAME,B19013_001E", # census tract name, median household income
             "for": "tract:*",
             "in": f"state:36 county:{county_fips}",
         }
@@ -114,4 +115,4 @@ def fetchACS():
         json.dump(all_tracts, file)
 
 fetchLL84()
-fetchACS()
+# fetchACS()
