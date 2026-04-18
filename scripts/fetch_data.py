@@ -2,11 +2,14 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
+import time
 
 # load private variables from local dot env file
 load_dotenv()
 # access vars
 APP_TOKEN = os.getenv("socrata_application_token")
+if APP_TOKEN is None:
+    raise RuntimeError("Missing socrata_application_token in .env file")
 
 NYC_COUNTIES = {
     "manhattan": "061",
@@ -31,20 +34,18 @@ def fetchLL84():
 
     # fetch all data in pages from LL84 table
     while True:
-        # bbl, bin, borough, 
+        # form a query for data entries we need 
         params = {
             "$select": (
-                "property_id,"
-                "nyc_borough_block_and_lot,"
-                "nyc_building_identification,"
-                "borough,"
-                "electricity_use_grid_purchase_1,"
-                "property_gfa_calculated_1,"
-                "primary_property_type_self"
+                "nyc_borough_block_and_lot," # BBL number identifying each property
+                "site_eui_kbtu_ft" # Energy Use Intensity metric measuring energy use per sqft
             ),
             "$where": (
-                "electricity_use_grid_purchase_1 IS NOT NULL"
+                # filter for non-null in 2023
+                "site_eui_kbtu_ft IS NOT NULL"
+                " AND nyc_borough_block_and_lot IS NOT NULL"
                 " AND year_ending='2023-12-31T00:00:00.000'"),
+            # paginate
             "$limit": limit,
             "$offset": offset,
         }
@@ -69,13 +70,15 @@ def fetchLL84():
                 break
 
             offset += limit
+
+            time.sleep(1)
         except requests.exceptions.RequestException as e:
-            print("Network Error: failed to reach LL84 {e}")
+            print(f"Network Error: failed to reach LL84 {e}")
             print()
 
-        # dump all data into local file
-        with open(f"data/raw/ll84_raw.json", "w", encoding="latin-1") as file:
-            json.dump(all_data, file)
+    # dump all data into local file
+    with open(f"data/raw/ll84_raw.json", "w", encoding="utf-8") as file:
+        json.dump(all_data, file)
 
 def fetchACS():
     all_tracts = []
@@ -83,7 +86,7 @@ def fetchACS():
     # query for each county's data from ACS
     for borough, county_fips in NYC_COUNTIES.items():
         params = {
-            "get": "NAME,B01003_001E,B19013_001E",
+            "get": "NAME,B19013_001E", # census tract name, median household income
             "for": "tract:*",
             "in": f"state:36 county:{county_fips}",
         }
@@ -112,4 +115,4 @@ def fetchACS():
         json.dump(all_tracts, file)
 
 fetchLL84()
-fetchACS()
+# fetchACS()
