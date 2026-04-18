@@ -67,6 +67,7 @@ def fetchLL84():
             
             # if we've hit the end of the data not because of a limit
             if len(rows) < limit:
+                print(f"Successful request: ll84 - {rows} total rows")
                 break
 
             offset += limit
@@ -115,4 +116,4 @@ def fetchACS():
         json.dump(all_tracts, file)
 
 fetchLL84()
-# fetchACS()
+fetchACS()
