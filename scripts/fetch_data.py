@@ -23,6 +23,8 @@ ACS_BASE_URL = "https://api.census.gov/data/2023/acs/acs5"
 
 LL84_BASE_URL = "https://data.cityofnewyork.us/resource/5zyy-y8am.json"
 
+PLUTO_BASE_URL = "https://data.cityofnewyork.us/resource/64uk-42ks.json"
+
 def fetchLL84():
     all_data = []
     limit = 1000
@@ -67,7 +69,7 @@ def fetchLL84():
             
             # if we've hit the end of the data not because of a limit
             if len(rows) < limit:
-                print(f"Successful request: ll84 - {len(rows)} total rows")
+                print(f"Successful request: ll84 - {len(all_data)} total rows")
                 break
 
             offset += limit
@@ -115,5 +117,57 @@ def fetchACS():
     with open("data/raw/acs_raw.json", "w") as file:
         json.dump(all_tracts, file)
 
+def fetchPLUTO():
+    all_data = []
+    limit = 1000
+    offset = 0
+
+    headers = {}
+    if APP_TOKEN:
+        headers["X-App-Token"] = APP_TOKEN
+
+    # fetch PLUTO data in pages
+    while True:
+        # form a lean query with only data I need
+        params = {
+            "$select": "bbl,bct2020",
+            "$where": "bbl IS NOT NULL AND bct2020 IS NOT NULL",
+            # paginate
+            "$limit": limit,
+            "$offset": offset,
+        }
+        
+        try:
+            response = requests.get(PLUTO_BASE_URL, params=params, headers=headers)
+            if response.status_code != 200:
+                print(f"Request Error: status code {response.status_code}")
+                print(response.text)
+                break
+
+            rows = response.json()
+            
+            if not rows:
+                break
+                
+            all_data.extend(rows)
+            print(f"Fetched {len(all_data)} rows so far...")
+
+            if len(rows) < limit: # we've hit the end of the data
+                print(f"Successful request: PLUTO - {len(all_data)} total rows")
+                break
+
+            offset += limit
+
+            time.sleep(1)
+
+        except requests.exceptions.RequestException as e:
+            print(f"Network Error: failed to reach PLUTO {e}")
+            print()
+
+    # dump all data into local file
+    with open(f"data/raw/pluto_raw.json", "w", encoding="utf-8") as file:
+        json.dump(all_data, file)
+
 fetchLL84()
 fetchACS()
+fetchPLUTO()
