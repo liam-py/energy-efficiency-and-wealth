@@ -19,7 +19,7 @@ NYC_COUNTIES = {
     "staten_island": "085",
 }
 
-ACS_BASE_URL = "https://api.census.gov/data/2022/acs/acs5"
+ACS_BASE_URL = "https://api.census.gov/data/2023/acs/acs5"
 
 LL84_BASE_URL = "https://data.cityofnewyork.us/resource/5zyy-y8am.json"
 
@@ -67,7 +67,7 @@ def fetchLL84():
             
             # if we've hit the end of the data not because of a limit
             if len(rows) < limit:
-                print(f"Successful request: ll84 - {rows} total rows")
+                print(f"Successful request: ll84 - {len(rows)} total rows")
                 break
 
             offset += limit
